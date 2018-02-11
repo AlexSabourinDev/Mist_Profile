@@ -99,7 +99,9 @@ Windows
 
 ##### Planned Support
 Unix,
-Mac OS
+Mac OS,
+GCC,
+Clang
 
 #### Sample Program
 ```C
