@@ -150,4 +150,4 @@ int main(int argc, char** argv)
 }
 ```
 
-![alt text](https://github.com/AlexSabourinDev/Mist_Profile/master/Example.png "Example Profile")
+![alt text](https://github.com/AlexSabourinDev/Mist_Profile/blob/master/Example.PNG "Example Profile")
