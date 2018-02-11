@@ -5,7 +5,9 @@ Mist_Profiler is completely thread safe and attempts to minimize contention betw
 
 ### Usage:
 Using `Mist_Profiler.h` is simple,
-Before any use of the profiler call
+Before any use of the profiler add `MIST_PROFILE_DEFINE_GLOBALS`
+to the top of a cpp file and call
+
 ```C
 	Mist_ProfilerInit();
 ```
@@ -70,6 +72,7 @@ before the last flush as the remaining buffers might have some samples left in t
 
 A multithreaded program could have the format:
 ```
+	Define Globals
 	Init Profiler
 	Add mist_ProfilePreface to the file
 
@@ -108,6 +111,7 @@ Clang
 #include <stdlib.h>
 #include <stdio.h>
 
+MIST_PROFILE_DEFINE_GLOBALS
 int main(int argc, char** argv)
 {
 	MIST_UNUSED(argc);

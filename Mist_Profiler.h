@@ -11,7 +11,8 @@ tracing utility. Mist_Profiler is completely thread safe and attempts to minimiz
 Usage:
 Using Mist_Profiler is simple,
 
-Before any use of the profiler, call
+Before any use of the profiler
+add MIST_PROFILE_DEFINE_GLOBALS to the top of a cpp file and call
 {
 	Mist_ProfilerInit();
 }
@@ -129,6 +130,11 @@ A multithreaded program could have the format:
 #endif
 
 #define MIST_UNUSED(a) (void)a
+#ifdef __cplusplus
+	#define MIST_INLINE inline
+#else
+	#define MIST_INLINE static
+#endif
 
 /* -Threads- */
 #if MIST_MSVC
@@ -143,7 +149,7 @@ A multithreaded program could have the format:
 	#error "Mist Mutex not implemented!"
 #endif
 
-static Mist_Mutex Mist_CreateMutex( void )
+MIST_INLINE Mist_Mutex Mist_CreateMutex( void )
 {
 #if MIST_WIN
 	return CreateMutex(NULL, FALSE, NULL);
@@ -152,7 +158,7 @@ static Mist_Mutex Mist_CreateMutex( void )
 #endif
 }
 
-static void Mist_DestroyMutex(Mist_Mutex mutex)
+MIST_INLINE void Mist_DestroyMutex(Mist_Mutex mutex)
 {
 #if MIST_WIN
 	BOOL result = CloseHandle(mutex);
@@ -163,7 +169,7 @@ static void Mist_DestroyMutex(Mist_Mutex mutex)
 #endif
 }
 
-static void Mist_LockMutex(Mist_Mutex mutex)
+MIST_INLINE void Mist_LockMutex(Mist_Mutex mutex)
 {
 #if MIST_WIN
 	DWORD waitResult = WaitForSingleObject(mutex, INFINITE);
@@ -174,7 +180,7 @@ static void Mist_LockMutex(Mist_Mutex mutex)
 #endif
 }
 
-static void Mist_UnlockMutex(Mist_Mutex mutex)
+MIST_INLINE void Mist_UnlockMutex(Mist_Mutex mutex)
 {
 #if MIST_WIN
 	BOOL result = ReleaseMutex(mutex);
@@ -185,7 +191,7 @@ static void Mist_UnlockMutex(Mist_Mutex mutex)
 #endif
 }
 
-static uint16_t Mist_GetThreadID( void )
+MIST_INLINE uint16_t Mist_GetThreadID( void )
 {
 #if MIST_WIN
 	return (uint16_t)GetCurrentThreadId();
@@ -194,7 +200,7 @@ static uint16_t Mist_GetThreadID( void )
 #endif
 }
 
-static uint16_t Mist_GetProcessID( void )
+MIST_INLINE uint16_t Mist_GetProcessID( void )
 {
 #if MIST_WIN
 	return (uint16_t)GetProcessId(GetCurrentProcess());
@@ -205,7 +211,7 @@ static uint16_t Mist_GetProcessID( void )
 
 /* -Timer- */
 
-static int64_t Mist_TimeStamp( void )
+MIST_INLINE int64_t Mist_TimeStamp( void )
 {
 #if MIST_WIN
 	LARGE_INTEGER frequency;
@@ -242,7 +248,7 @@ typedef struct
 
 }  Mist_ProfileSample;
 
-static Mist_ProfileSample Mist_CreateProfileSample(const char* category, const char* name, int64_t timeStamp, char eventType)
+MIST_INLINE Mist_ProfileSample Mist_CreateProfileSample(const char* category, const char* name, int64_t timeStamp, char eventType)
 {
 	Mist_ProfileSample sample;
 	sample.timeStamp = timeStamp;
@@ -263,7 +269,7 @@ typedef struct
 	uint16_t nextSampleWrite;
 
 } Mist_ProfileBuffer;
-MIST_THREAD_LOCAL Mist_ProfileBuffer mist_ProfileBuffer;
+extern MIST_THREAD_LOCAL Mist_ProfileBuffer mist_ProfileBuffer;
 
 
 typedef struct
@@ -283,15 +289,15 @@ typedef struct
 	Mist_Mutex lock;
 
 } Mist_ProfileBufferList;
-Mist_ProfileBufferList mist_ProfileBufferList;
+extern Mist_ProfileBufferList mist_ProfileBufferList;
 
-static void Mist_ProfileInit( void )
+MIST_INLINE void Mist_ProfileInit( void )
 {
 	mist_ProfileBufferList.lock = Mist_CreateMutex();
 }
 
 /* Terminate musst be the last thing called, assure that profiling events will no longer be called once this is called */
-static void Mist_ProfileTerminate( void )
+MIST_INLINE void Mist_ProfileTerminate( void )
 {
 	Mist_ProfileBufferNode* iter;
 	Mist_LockMutex(mist_ProfileBufferList.lock);
@@ -314,13 +320,13 @@ static void Mist_ProfileTerminate( void )
 	}
 }
 
-static uint16_t Mist_ProfileListSize()
+MIST_INLINE uint16_t Mist_ProfileListSize()
 {
 	return mist_ProfileBufferList.listSize;
 }
 
 /* Not thread safe */
-static void Mist_ProfileAddBufferToList(Mist_ProfileBuffer* buffer)
+MIST_INLINE void Mist_ProfileAddBufferToList(Mist_ProfileBuffer* buffer)
 {
 	Mist_ProfileBufferNode* node = (Mist_ProfileBufferNode*)malloc(sizeof(Mist_ProfileBufferNode));
 	memcpy(&node->buffer, buffer, sizeof(Mist_ProfileBuffer));
@@ -347,7 +353,7 @@ static void Mist_ProfileAddBufferToList(Mist_ProfileBuffer* buffer)
 /* Returns a string to be printed, this takes time. */
 /* Thread safe */
 /* The returned string must be freed. */
-static char* Mist_Flush( void )
+MIST_INLINE char* Mist_Flush( void )
 {
 	Mist_ProfileBufferNode* start;
 	Mist_LockMutex(mist_ProfileBufferList.lock);
@@ -415,11 +421,11 @@ static char* Mist_Flush( void )
 
 	return print;
 }
-const char* mist_ProfilePreface = "{\"traceEvents\":[{}";
-const char* mist_ProfilePostface = "]}";
+static const char* mist_ProfilePreface = "{\"traceEvents\":[{}";
+static const char* mist_ProfilePostface = "]}";
 
 /* Thread safe */
-static void Mist_WriteProfileSample(Mist_ProfileSample sample)
+MIST_INLINE void Mist_WriteProfileSample(Mist_ProfileSample sample)
 {
 	mist_ProfileBuffer.samples[mist_ProfileBuffer.nextSampleWrite] = sample;
 
@@ -436,7 +442,7 @@ static void Mist_WriteProfileSample(Mist_ProfileSample sample)
 }
 
 /* Thread safe */
-static void Mist_FlushThreadBuffer( void )
+MIST_INLINE void Mist_FlushThreadBuffer( void )
 {
 	Mist_LockMutex(mist_ProfileBufferList.lock);
 
@@ -456,5 +462,9 @@ static void Mist_FlushThreadBuffer( void )
 #define MIST_BEGIN_PROFILE(cat, name) Mist_WriteProfileSample(Mist_CreateProfileSample(cat, name, Mist_TimeStamp(), MIST_PROFILE_TYPE_BEGIN));
 #define MIST_END_PROFILE(cat, name) Mist_WriteProfileSample(Mist_CreateProfileSample(cat, name, Mist_TimeStamp(), MIST_PROFILE_TYPE_END));
 #define MIST_PROFILE_EVENT(cat, name) Mist_WriteProfileSample(Mist_CreateProfileSample(cat, name, Mist_TimeStamp(), MIST_PROFILE_TYPE_INSTANT));
+
+#define MIST_PROFILE_DEFINE_GLOBALS \
+	Mist_ProfileBufferList mist_ProfileBufferList; \
+	MIST_THREAD_LOCAL Mist_ProfileBuffer mist_ProfileBuffer;
 
 #endif /* __MIST_PROFILER_H */
