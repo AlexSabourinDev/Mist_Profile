@@ -150,4 +150,5 @@ int main(int argc, char** argv)
 }
 ```
 
+##### Visualized Capture:
 ![alt text](https://github.com/AlexSabourinDev/Mist_Profile/blob/master/Example.PNG "Example Profile")
