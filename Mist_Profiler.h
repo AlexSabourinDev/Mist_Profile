@@ -1,6 +1,102 @@
 #ifndef __MIST_PROFILER_H
 #define __MIST_PROFILER_H
 
+/*
+Mist_Profiler Usage, License: MIT
+
+About:
+The Mist_Profiler is a single header utility that generates chrome:\\tracing json that can be then imported and viewed using chrome's
+tracing utility. Mist_Profiler is completely thread safe and attempts to minimize contention between thread.
+
+Usage:
+Using Mist_Profiler is simple,
+
+Before any use of the profiler, call
+{
+	Mist_ProfilerInit();
+}
+
+And at the end of your program execution, call
+{
+	Mist_ProfilerTerminate();
+}
+
+Warning: No other calls to the profiler should be made after terminate has been invoked!
+
+To gather samples for the profiler, simply call
+
+{
+	MIST_BEGIN_PROFILE("Category Of Sample", "Sample Name");
+
+	// ...
+
+	MIST_END_PROFILE("Category Of Sample", "Sample Name");
+}
+
+Chrome://tracing matches these calls by name and category so determining a unique name for these samples and categories is important
+to generate informative profiling data.
+
+Warning: Category and Name are not stored, their lifetime must exist either until program termination or until the next call to Mist_FlushThreadBuffer and Mist_Flush.
+
+Once a significant amount of samples have been gathered, samples have to be flushed.
+A simple way to do this is shown below
+
+{
+	// Buffers are only added to the list once they are full. This minimizes contention and allows simple modification of the buffers.
+	// The buffers are also stored as thread local globals, and thus must be flushed from their respective threads.
+	if(Mist_ProfileListSize() == 0)
+	{
+		// Adds the current buffer to the list of buffers even if it hasn't been filled up yet.
+		Mist_FlushThreadBuffer();
+	}
+
+	char* print = Mist_Flush();
+
+	// Note the comma here, this is to assure that the current set of samples are appended to the previous set. This comma is required in the final JSON document.
+	fprintf(fileHandle, ",%s", print);
+
+	free(print);
+}
+
+Finally, when printing out the buffer, the set of samples must include 
+the preface and postface which complete the profiling json format
+{
+	fprintf(fileHandle, "%s", mist_ProfilePreface);
+	fprintf(fileHandle, ",%s", flushedSamples);
+	fprintf(fileHandle, ",%s", moreFlushedSamples);
+	fprintf(fileHandle, "%s", mist_ProfilePostface);
+}
+
+Threading:
+
+It is important to call Mist_FlushThreadBuffer() before shutting down a thread and 
+before the last flush as the remaining buffers might have some samples left in them.
+
+A multithreaded program could have the format:
+{
+	Init Profiler
+	Add mist_ProfilePreface to the file
+
+	Startup job threads
+		Create samples in these threads
+		At thread termination, call Mist_FlushThreadBuffer()
+
+	Startup flushing thread
+		Call Mist_ProfileListSize()
+		If there are buffers, flush them to a file
+		At thread termination, call Mist_FlushThreadBuffer()
+
+	Kill all the threads
+	Call Mist_Flush() to flush the remaining buffers
+
+	Print to a file
+	Add mist_ProfilePostface to the file
+
+	Terminate the profiler
+}
+
+*/
+
 /* -Platform Macros- */
 
 #if defined(_WIN32) || defined(_WIN64) || defined(__WIN32__)
@@ -158,6 +254,7 @@ static Mist_ProfileSample Mist_CreateProfileSample(const char* category, const c
 	return sample;
 }
 
+/* Bigger buffers mean less contention for the list, but also means longer flushes and more memory usage */
 #define MIST_BUFFER_SIZE 1024
 
 typedef struct
@@ -193,9 +290,28 @@ static void Mist_ProfileInit( void )
 	mist_ProfileBufferList.lock = Mist_CreateMutex();
 }
 
+/* Terminate musst be the last thing called, assure that profiling events will no longer be called once this is called */
 static void Mist_ProfileTerminate( void )
 {
+	Mist_ProfileBufferNode* iter;
+	Mist_LockMutex(mist_ProfileBufferList.lock);
+
+	iter = mist_ProfileBufferList.first;
+	mist_ProfileBufferList.first = NULL;
+	mist_ProfileBufferList.last = NULL;
+	mist_ProfileBufferList.listSize = 0;
+
+	Mist_UnlockMutex(mist_ProfileBufferList.lock);
+
 	Mist_DestroyMutex(mist_ProfileBufferList.lock);
+	mist_ProfileBufferList.lock = NULL;
+
+	while (iter != NULL)
+	{
+		Mist_ProfileBufferNode* next = (Mist_ProfileBufferNode*)iter->next;
+		free(iter);
+		iter = next;
+	}
 }
 
 static uint16_t Mist_ProfileListSize()
@@ -297,8 +413,8 @@ static char* Mist_Flush( void )
 
 	return print;
 }
-const char* mist_PrintPreface = "{\"traceEvents\":[";
-const char* mist_PrintPostface = "]}";
+const char* mist_ProfilePreface = "{\"traceEvents\":[{}";
+const char* mist_ProfilePostface = "]}";
 
 /* Thread safe */
 static void Mist_WriteProfileSample(Mist_ProfileSample sample)
@@ -318,7 +434,7 @@ static void Mist_WriteProfileSample(Mist_ProfileSample sample)
 }
 
 /* Thread safe */
-static void Mist_FlushActiveBuffer( void )
+static void Mist_FlushThreadBuffer( void )
 {
 	Mist_LockMutex(mist_ProfileBufferList.lock);
 
