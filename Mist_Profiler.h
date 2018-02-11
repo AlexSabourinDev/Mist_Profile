@@ -217,8 +217,8 @@ static void Mist_ProfileAddBufferToList(Mist_ProfileBuffer* buffer)
 	}
 }
 
-// Returns a string to be printed, this takes time.
-// The returned string must be freed.
+/* Returns a string to be printed, this takes time. */
+/* The returned string must be freed. */
 static char* Mist_Flush( void )
 {
 	Mist_ProfileBufferNode* start;
@@ -234,7 +234,7 @@ static char* Mist_Flush( void )
 	char* print = NULL;
 	if (start == NULL)
 	{
-		// Give an empty string
+		/* Give an empty string */
 		print = (char*)malloc(1);
 		*print = 0;
 		return print;
@@ -243,7 +243,7 @@ static char* Mist_Flush( void )
 	size_t size = 0;
 	while (start != NULL)
 	{
-		// Format: process Id, thread Id,  timestamp, event, category, name
+		/* Format: process Id, thread Id,  timestamp, event, category, name */
 		const char* const profileSample = "{\"pid\":%" PRIu16 ", \"tid\":%" PRIu16 ", \"ts\":%" PRId64 ", \"ph\":\"%c\", \"cat\": \"%s\", \"name\": \"%s\", \"args\":{\"tool\":\"Mist_Profile\"}},";
 
 		for (uint16_t i = 0; i < start->buffer.nextSampleWrite; i++)
