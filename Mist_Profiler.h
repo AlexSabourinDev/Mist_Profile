@@ -101,7 +101,7 @@ static uint16_t Mist_GetThreadID( void )
 static uint16_t Mist_GetProcessID( void )
 {
 #if MIST_WIN
-	GetProcessId(GetCurrentProcess());
+	return (uint16_t)GetProcessId(GetCurrentProcess());
 #else
 	#error "Mist_GetProcessID not implemented!"
 #endif
