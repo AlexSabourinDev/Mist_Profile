@@ -144,48 +144,42 @@ A multithreaded program could have the format:
 #endif
 
 #if MIST_WIN
-	typedef HANDLE Mist_Mutex;
+	typedef CRITICAL_SECTION Mist_Lock;
 #else
 	#error "Mist Mutex not implemented!"
 #endif
 
-MIST_INLINE Mist_Mutex Mist_CreateMutex( void )
+MIST_INLINE void Mist_InitLock(Mist_Lock* lock)
 {
 #if MIST_WIN
-	return CreateMutex(NULL, FALSE, NULL);
+	InitializeCriticalSection(lock);
 #else
-	#error "Mist_CreateMutex not implemented!"
+	#error "Mist_CreateLock not implemented!"
 #endif
 }
 
-MIST_INLINE void Mist_DestroyMutex(Mist_Mutex mutex)
+MIST_INLINE void Mist_TerminateLock(Mist_Lock* lock)
 {
 #if MIST_WIN
-	BOOL result = CloseHandle(mutex);
-	MIST_UNUSED(result);
-	assert(result == TRUE);
+	DeleteCriticalSection(lock);
 #else
-	#error "Mist_DestroyMutex not implemented!"
+	#error "Mist_DestroyLock not implemented!"
 #endif
 }
 
-MIST_INLINE void Mist_LockMutex(Mist_Mutex mutex)
+MIST_INLINE void Mist_LockSection(Mist_Lock* lock)
 {
 #if MIST_WIN
-	DWORD waitResult = WaitForSingleObject(mutex, INFINITE);
-	MIST_UNUSED(waitResult);
-	assert(waitResult == WAIT_OBJECT_0);
+	EnterCriticalSection(lock);
 #else
 	#error "Mist_LockMutex not implemented!"
 #endif
 }
 
-MIST_INLINE void Mist_UnlockMutex(Mist_Mutex mutex)
+MIST_INLINE void Mist_UnlockSection(Mist_Lock* lock)
 {
 #if MIST_WIN
-	BOOL result = ReleaseMutex(mutex);
-	MIST_UNUSED(result);
-	assert(result == TRUE);
+	LeaveCriticalSection(lock);
 #else
 	#error "Mist_UnlockMutex not implemented!"
 #endif
@@ -286,31 +280,30 @@ typedef struct
 	Mist_ProfileBufferNode* last;
 	uint16_t listSize;
 
-	Mist_Mutex lock;
+	Mist_Lock lock;
 
 } Mist_ProfileBufferList;
 extern Mist_ProfileBufferList mist_ProfileBufferList;
 
 MIST_INLINE void Mist_ProfileInit( void )
 {
-	mist_ProfileBufferList.lock = Mist_CreateMutex();
+	Mist_InitLock(&mist_ProfileBufferList.lock);
 }
 
 /* Terminate musst be the last thing called, assure that profiling events will no longer be called once this is called */
 MIST_INLINE void Mist_ProfileTerminate( void )
 {
 	Mist_ProfileBufferNode* iter;
-	Mist_LockMutex(mist_ProfileBufferList.lock);
+	Mist_LockSection(&mist_ProfileBufferList.lock);
 
 	iter = mist_ProfileBufferList.first;
 	mist_ProfileBufferList.first = NULL;
 	mist_ProfileBufferList.last = NULL;
 	mist_ProfileBufferList.listSize = 0;
 
-	Mist_UnlockMutex(mist_ProfileBufferList.lock);
+	Mist_UnlockSection(&mist_ProfileBufferList.lock);
 
-	Mist_DestroyMutex(mist_ProfileBufferList.lock);
-	mist_ProfileBufferList.lock = NULL;
+	Mist_TerminateLock(&mist_ProfileBufferList.lock);
 
 	while (iter != NULL)
 	{
@@ -356,14 +349,14 @@ MIST_INLINE void Mist_ProfileAddBufferToList(Mist_ProfileBuffer* buffer)
 MIST_INLINE char* Mist_Flush( void )
 {
 	Mist_ProfileBufferNode* start;
-	Mist_LockMutex(mist_ProfileBufferList.lock);
+	Mist_LockSection(&mist_ProfileBufferList.lock);
 
 	start = mist_ProfileBufferList.first;
 	mist_ProfileBufferList.first = NULL;
 	mist_ProfileBufferList.last = NULL;
 	mist_ProfileBufferList.listSize = 0;
 
-	Mist_UnlockMutex(mist_ProfileBufferList.lock);
+	Mist_UnlockSection(&mist_ProfileBufferList.lock);
 
 
 	char* print = NULL;
@@ -432,24 +425,24 @@ MIST_INLINE void Mist_WriteProfileSample(Mist_ProfileSample sample)
 	mist_ProfileBuffer.nextSampleWrite++;
 	if (mist_ProfileBuffer.nextSampleWrite == MIST_BUFFER_SIZE)
 	{
-		Mist_LockMutex(mist_ProfileBufferList.lock);
+		Mist_LockSection(&mist_ProfileBufferList.lock);
 
 		Mist_ProfileAddBufferToList(&mist_ProfileBuffer);
 		mist_ProfileBuffer.nextSampleWrite = 0;
 
-		Mist_UnlockMutex(mist_ProfileBufferList.lock);
+		Mist_UnlockSection(&mist_ProfileBufferList.lock);
 	}
 }
 
 /* Thread safe */
 MIST_INLINE void Mist_FlushThreadBuffer( void )
 {
-	Mist_LockMutex(mist_ProfileBufferList.lock);
+	Mist_LockSection(&mist_ProfileBufferList.lock);
 
 	Mist_ProfileAddBufferToList(&mist_ProfileBuffer);
 	mist_ProfileBuffer.nextSampleWrite = 0;
 
-	Mist_UnlockMutex(mist_ProfileBufferList.lock);
+	Mist_UnlockSection(&mist_ProfileBufferList.lock);
 }
 
 
