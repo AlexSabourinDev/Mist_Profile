@@ -181,6 +181,7 @@ typedef struct
 {
 	Mist_ProfileBufferNode* first;
 	Mist_ProfileBufferNode* last;
+	uint16_t listSize;
 
 	Mist_Mutex lock;
 
@@ -197,6 +198,12 @@ static void Mist_ProfileTerminate( void )
 	Mist_DestroyMutex(mist_ProfileBufferList.lock);
 }
 
+static uint16_t Mist_ProfileListSize()
+{
+	return mist_ProfileBufferList.listSize;
+}
+
+/* Not thread safe */
 static void Mist_ProfileAddBufferToList(Mist_ProfileBuffer* buffer)
 {
 	Mist_ProfileBufferNode* node = (Mist_ProfileBufferNode*)malloc(sizeof(Mist_ProfileBufferNode));
@@ -208,16 +215,21 @@ static void Mist_ProfileAddBufferToList(Mist_ProfileBuffer* buffer)
 		assert(mist_ProfileBufferList.last == NULL);
 		mist_ProfileBufferList.first = node;
 		mist_ProfileBufferList.last = node;
+		mist_ProfileBufferList.listSize = 1;
 	}
 	else
 	{
+		assert(mist_ProfileBufferList.listSize != (~(uint16_t)0));
 		assert(mist_ProfileBufferList.last->next == NULL);
+
 		mist_ProfileBufferList.last->next = node;
 		mist_ProfileBufferList.last = node;
+		mist_ProfileBufferList.listSize++;
 	}
 }
 
 /* Returns a string to be printed, this takes time. */
+/* Thread safe */
 /* The returned string must be freed. */
 static char* Mist_Flush( void )
 {
@@ -227,6 +239,7 @@ static char* Mist_Flush( void )
 	start = mist_ProfileBufferList.first;
 	mist_ProfileBufferList.first = NULL;
 	mist_ProfileBufferList.last = NULL;
+	mist_ProfileBufferList.listSize = 0;
 
 	Mist_UnlockMutex(mist_ProfileBufferList.lock);
 
@@ -287,7 +300,7 @@ static char* Mist_Flush( void )
 const char* mist_PrintPreface = "{\"traceEvents\":[";
 const char* mist_PrintPostface = "]}";
 
-
+/* Thread safe */
 static void Mist_WriteProfileSample(Mist_ProfileSample sample)
 {
 	mist_ProfileBuffer.samples[mist_ProfileBuffer.nextSampleWrite] = sample;
@@ -304,6 +317,7 @@ static void Mist_WriteProfileSample(Mist_ProfileSample sample)
 	}
 }
 
+/* Thread safe */
 static void Mist_FlushActiveBuffer( void )
 {
 	Mist_LockMutex(mist_ProfileBufferList.lock);
