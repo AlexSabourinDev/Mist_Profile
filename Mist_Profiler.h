@@ -52,7 +52,7 @@ static Mist_Mutex Mist_CreateMutex( void )
 #if MIST_WIN
 	return CreateMutex(NULL, FALSE, NULL);
 #else
-	#error "Mist mutex creation not implemented!"
+	#error "Mist_CreateMutex not implemented!"
 #endif
 }
 
@@ -63,7 +63,7 @@ static void Mist_DestroyMutex(Mist_Mutex mutex)
 	MIST_UNUSED(result);
 	assert(result == TRUE);
 #else
-	#error "Mist mutex destruction not implemented!"
+	#error "Mist_DestroyMutex not implemented!"
 #endif
 }
 
@@ -74,7 +74,7 @@ static void Mist_LockMutex(Mist_Mutex mutex)
 	MIST_UNUSED(waitResult);
 	assert(waitResult == WAIT_OBJECT_0);
 #else
-	#error "Mist LockMutex not implemented!"
+	#error "Mist_LockMutex not implemented!"
 #endif
 }
 
@@ -85,16 +85,25 @@ static void Mist_UnlockMutex(Mist_Mutex mutex)
 	MIST_UNUSED(result);
 	assert(result == TRUE);
 #else
-	#error "Mist UnlockMutex not implemented!"
+	#error "Mist_UnlockMutex not implemented!"
 #endif
 }
 
-static uint16_t Mist_GetThreadID(void)
+static uint16_t Mist_GetThreadID( void )
 {
 #if MIST_WIN
 	return (uint16_t)GetCurrentThreadId();
 #else
-#error "Mist GetCurrentThreadId not implemented!"
+	#error "Mist_GetThreadId not implemented!"
+#endif
+}
+
+static uint16_t Mist_GetProcessID( void )
+{
+#if MIST_WIN
+	GetProcessId(GetCurrentProcess());
+#else
+	#error "Mist_GetProcessID not implemented!"
 #endif
 }
 
@@ -117,7 +126,7 @@ static int64_t Mist_TimeStamp( void )
 	int64_t microSeconds = (int64_t)time.QuadPart * 1000000;
 	return microSeconds / (int64_t)frequency.QuadPart;
 #else
-	#error "OS timer has not been implemented!"
+	#error "Mist_TimeStamp not implemented!"
 #endif
 }
 
@@ -143,7 +152,7 @@ static Mist_ProfileSample Mist_CreateProfileSample(const char* category, const c
 	sample.timeStamp = timeStamp;
 	sample.category = category;
 	sample.name = name;
-	sample.processorID = 0;
+	sample.processorID = Mist_GetProcessID();
 	sample.threadID = Mist_GetThreadID();
 	sample.eventType = eventType;
 	return sample;
@@ -249,7 +258,7 @@ static char* Mist_Flush( void )
 			
 			size_t previousSize = size;
 			size += sampleSize;
-			char* appended = realloc(print, size + 1 /* Add space for the null terminator*/);
+			char* appended = (char*)realloc(print, size + 1 /* Add space for the null terminator*/);
 			if (appended == NULL)
 			{
 				/* Failed to allocate the buffer! Give up here and return what we have */
@@ -266,7 +275,7 @@ static char* Mist_Flush( void )
 			}
 		}
 
-		Mist_ProfileBufferNode* next = start->next;
+		Mist_ProfileBufferNode* next = (Mist_ProfileBufferNode*)start->next;
 		free(start);
 		start = next;
 	}
