@@ -161,6 +161,6 @@ int main(int argc, char** argv)
 
 ##### Thanks
 Big thanks to
-https://www.gamasutra.com/view/news/176420/Indepth_Using_Chrometracing_to_view_your_inline_profiling_data.php and
+https://www.gamasutra.com/view/news/176420/Indepth_Using_Chrometracing_to_view_your_inline_profiling_data.php
 https://aras-p.info/blog/2017/01/23/Chrome-Tracing-as-Profiler-Frontend/
-For providing the information needed to implement this library.
+and the team working on chrome://tracing or providing the tools and information needed to implement this library.
