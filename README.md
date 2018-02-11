@@ -98,7 +98,7 @@ MSVC 2017
 Windows
 
 ##### Planned Support
-Unix
+Unix,
 Mac OS
 
 #### Sample Program
