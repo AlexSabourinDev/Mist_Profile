@@ -152,3 +152,9 @@ int main(int argc, char** argv)
 
 ##### Visualized Capture:
 ![alt text](https://github.com/AlexSabourinDev/Mist_Profile/blob/master/Example.PNG "Example Profile")
+
+##### Thanks
+Big thanks to
+https://www.gamasutra.com/view/news/176420/Indepth_Using_Chrometracing_to_view_your_inline_profiling_data.php and
+https://aras-p.info/blog/2017/01/23/Chrome-Tracing-as-Profiler-Frontend/
+For providing the information needed to implement this library.
