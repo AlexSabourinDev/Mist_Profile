@@ -364,8 +364,10 @@ static char* Mist_Flush( void )
 	if (start == NULL)
 	{
 		/* Give an empty string */
-		print = (char*)malloc(1);
-		*print = 0;
+		print = (char*)malloc(3);
+		print[0] = '{';
+		print[1] = '}';
+		print[2] = 0;
 		return print;
 	}
 
