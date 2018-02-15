@@ -409,13 +409,12 @@ MIST_INLINE char* Mist_Flush( void )
 		free(start);
 		start = next;
 	}
-	/* Erase the last comma*/
-	print[size - 1] = '\0';
+	print[size] = '\0';
 
 	return print;
 }
-static const char* mist_ProfilePreface = "{\"traceEvents\":[{}";
-static const char* mist_ProfilePostface = "]}";
+static const char* mist_ProfilePreface = "{\"traceEvents\":[{},";
+static const char* mist_ProfilePostface = "{}]}";
 
 /* Thread safe */
 MIST_INLINE void Mist_WriteProfileSample(Mist_ProfileSample sample)
