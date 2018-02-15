@@ -46,12 +46,7 @@ A simple way to do this is shown below
 	}
 
 	char* print = Mist_Flush();
-
-	// Note the comma here, 
-	// this is to assure that the current set of samples are appended to the previous set. 
-	// This comma is required in the final JSON document.
-	fprintf(fileHandle, ",%s", print);
-
+	fprintf(fileHandle, "%s", print);
 	free(print);
 ```
 **Warning:** Flushing many samples can be quite slow, the size of the buffer can either be minimized or
@@ -60,8 +55,8 @@ flushing on a seperate thread can be used to minimize the latency.
 Finally, when printing out the buffer, the set of samples must include the preface and postface.
 ```C
 	fprintf(fileHandle, "%s", mist_ProfilePreface);
-	fprintf(fileHandle, ",%s", flushedSamples);
-	fprintf(fileHandle, ",%s", moreFlushedSamples);
+	fprintf(fileHandle, "%s", flushedSamples);
+	fprintf(fileHandle, "%s", moreFlushedSamples);
 	fprintf(fileHandle, "%s", mist_ProfilePostface);
 ```
 
@@ -137,7 +132,7 @@ int main(int argc, char** argv)
 
 	MIST_BEGIN_PROFILE("Profiling!", "Writing To File!");
 	fprintf(file, "%s", mist_ProfilePreface);
-	fprintf(file, ",%s", buffer);
+	fprintf(file, "%s", buffer);
 	free(buffer);
 	MIST_END_PROFILE("Profiling!", "Writing To File!");
 
@@ -146,7 +141,7 @@ int main(int argc, char** argv)
 	Mist_FlushThreadBuffer();
 	buffer = Mist_Flush();
 
-	fprintf(file, ",%s", buffer);
+	fprintf(file, "%s", buffer);
 	fprintf(file, "%s", mist_ProfilePostface);
 	free(buffer);
 
@@ -164,3 +159,6 @@ Big thanks to
 https://www.gamasutra.com/view/news/176420/Indepth_Using_Chrometracing_to_view_your_inline_profiling_data.php
 https://aras-p.info/blog/2017/01/23/Chrome-Tracing-as-Profiler-Frontend/
 and the team working on chrome://tracing or providing the tools and information needed to implement this library.
+
+#### Change Log
+2018-02-14: Removed the need for a comma to append the buffers. This will break previous usage of the profiler but since it isn't a week old, I believe this is fine.
