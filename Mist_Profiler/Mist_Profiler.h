@@ -33,7 +33,9 @@ A simple way to do this is shown below
 		Mist_FlushThreadBuffer();
 	}
 
-	char* print = Mist_FlushAlloc();
+	char* print;
+	size_t bufferSize;
+	Mist_FlushAlloc(&print, &bufferSize);
 
 	fprintf(fileHandle, "%s", mist_ProfilePreface);
 	fprintf(fileHandle, "%s", print);
