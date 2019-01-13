@@ -339,7 +339,7 @@ static void Mist_ProfileAddBufferToList(Mist_ProfileBuffer* buffer)
 	}
 	else
 	{
-		assert(mist_ProfileBufferList.listSize != (~(uint16_t)0));
+		assert(mist_ProfileBufferList.listSize != UINT16_MAX);
 		assert(mist_ProfileBufferList.last->next == NULL);
 
 		mist_ProfileBufferList.last->next = node;
