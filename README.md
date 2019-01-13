@@ -5,7 +5,11 @@ Mist_Profiler is completely thread safe and attempts to minimize contention betw
 
 ### Usage:
 Using `Mist_Profiler.h` is simple,
-Before any use of the profiler add define MIST_PROFILE_IMPLEMENTATION above the header file include in one of your source files.
+Include in one of your source files with define:
+```C
+	#define MIST_PROFILE_IMPLEMENTATION
+	#include <Mist_Profiler.h>
+```
 
 Before profiling call:
 ```C
