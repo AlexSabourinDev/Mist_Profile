@@ -48,7 +48,9 @@ A simple way to do this is shown below
 		Mist_FlushThreadBuffer();
 	}
 
-	char* print = Mist_FlushAlloc(); // Edit: Changed from Mist_Flush!! Mist_Flush now requires a buffer to be passed to it.
+	char* print;
+	size_t bufferSize;
+	Mist_FlushAlloc(&print, &bufferSize); // Edit: Changed from Mist_Flush!! Mist_Flush now requires a buffer to be passed to it.
 	fprintf(fileHandle, "%s", print);
 	free(print);
 ```
