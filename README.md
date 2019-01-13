@@ -96,15 +96,15 @@ A multithreaded program could have the format:
 
 ##### Tested Compilers
 - MSVC 2017
-- Clang
 
 ##### Supported Platforms
 - Windows
 
 ##### Planned Support
-- Unix,
-- Mac OS,
+- Unix
+- Mac OS
 - GCC
+- Clang
 
 #### Sample Program
 ```C
