@@ -112,8 +112,8 @@ A multithreaded program could have the format:
 
 int main(int argc, char** argv)
 {
-	MIST_UNUSED(argc);
-	MIST_UNUSED(argv);
+	(void)argc;
+	(void)argv;
 
 	Mist_ProfileInit();
 
