@@ -11,34 +11,16 @@ tracing utility. Mist_Profiler is completely thread safe and attempts to minimiz
 Usage:
 Using Mist_Profiler is simple,
 
-Before any use of the profiler
-add MIST_PROFILE_DEFINE_GLOBALS to the top of a cpp file and call
-{
-	Mist_ProfilerInit();
-}
+SETUP/TEARDOWN:
+- #define MIST_PROFILE_IMPLEMENTATION before including the header file in one of your source files.
+- Mist_ProfileInit(); to init
+- Mist_ProfileTerminate(); to close
 
-And at the end of your program execution, call
-{
-	Mist_ProfilerTerminate();
-}
+NOTE: Chrome://tracing matches these calls by name and category assuring a unique name is important.
 
-Warning: No other calls to the profiler should be made after terminate has been invoked!
+WARNING: Category and Name are not stored, their lifetime must exist either until program termination or until the next call to Mist_FlushThreadBuffer and Mist_Flush.
 
-To gather samples for the profiler, simply call
-
-{
-	MIST_BEGIN_PROFILE("Category Of Sample", "Sample Name");
-
-	// ...
-
-	MIST_END_PROFILE("Category Of Sample", "Sample Name");
-}
-
-Chrome://tracing matches these calls by name and category so determining a unique name for these samples and categories is important
-to generate informative profiling data.
-
-Warning: Category and Name are not stored, their lifetime must exist either until program termination or until the next call to Mist_FlushThreadBuffer and Mist_Flush.
-
+USAGE:
 Once a significant amount of samples have been gathered, samples have to be flushed.
 A simple way to do this is shown below
 
@@ -51,24 +33,16 @@ A simple way to do this is shown below
 		Mist_FlushThreadBuffer();
 	}
 
-	char* print = Mist_Flush();
+	char* print = Mist_FlushAlloc();
 
-	// Note the comma here, this is to assure that the current set of samples are appended to the previous set. This comma is required in the final JSON document.
-	fprintf(fileHandle, ",%s", print);
+	fprintf(fileHandle, "%s", mist_ProfilePreface);
+	fprintf(fileHandle, "%s", print);
+	fprintf(fileHandle, "%s", mist_ProfilePostface);
 
 	free(print);
 }
 
-Finally, when printing out the buffer, the set of samples must include 
-the preface and postface which complete the profiling json format
-{
-	fprintf(fileHandle, "%s", mist_ProfilePreface);
-	fprintf(fileHandle, ",%s", flushedSamples);
-	fprintf(fileHandle, ",%s", moreFlushedSamples);
-	fprintf(fileHandle, "%s", mist_ProfilePostface);
-}
-
-Threading:
+THREADING:
 
 It is important to call Mist_FlushThreadBuffer() before shutting down a thread and 
 before the last flush as the remaining buffers might have some samples left in them.
@@ -88,7 +62,7 @@ A multithreaded program could have the format:
 		At thread termination, call Mist_FlushThreadBuffer()
 
 	Kill all the threads
-	Call Mist_Flush() to flush the remaining buffers
+	Call Mist_FlushAlloc() to flush the remaining buffers
 
 	Print to a file
 	Add mist_ProfilePostface to the file
@@ -97,6 +71,55 @@ A multithreaded program could have the format:
 }
 
 */
+
+/* -API- */
+
+#include <stdint.h>
+
+#define MIST_PROFILE_TYPE_BEGIN 'B'
+#define MIST_PROFILE_TYPE_END 'E'
+#define MIST_PROFILE_TYPE_INSTANT 'I'
+
+#define MIST_PROFILE_BEGIN(cat, name) Mist_WriteProfileSample(Mist_CreateProfileSample(cat, name, Mist_TimeStamp(), MIST_PROFILE_TYPE_BEGIN));
+#define MIST_PROFILE_END(cat, name) Mist_WriteProfileSample(Mist_CreateProfileSample(cat, name, Mist_TimeStamp(), MIST_PROFILE_TYPE_END));
+#define MIST_PROFILE_EVENT(cat, name) Mist_WriteProfileSample(Mist_CreateProfileSample(cat, name, Mist_TimeStamp(), MIST_PROFILE_TYPE_INSTANT));
+
+typedef struct
+{
+	int64_t timeStamp;
+
+	const char* category;
+	const char* name;
+
+	uint16_t processorID;
+	uint16_t threadID;
+
+	char eventType;
+
+}  Mist_ProfileSample;
+
+static const char* mist_ProfilePreface = "{\"traceEvents\":[{},";
+static const char* mist_ProfilePostface = "{}]}";
+
+void Mist_ProfileInit(void);
+void Mist_ProfileTerminate(void);
+
+Mist_ProfileSample Mist_CreateProfileSample(const char* category, const char* name, int64_t timeStamp, char eventType);
+void Mist_WriteProfileSample(Mist_ProfileSample sample);
+
+uint16_t Mist_ProfileListSize();
+
+size_t Mist_ProfileStringSize(void);
+void Mist_Flush(char* buffer, size_t* maxBufferSize);
+void Mist_FlushAlloc(char** buffer, size_t* bufferSize);
+void Mist_FlushThreadBuffer(void);
+
+int64_t Mist_TimeStamp(void);
+
+
+
+/* -Implementation- */
+#ifdef MIST_PROFILE_IMPLEMENTATION
 
 /* -Platform Macros- */
 
@@ -118,25 +141,21 @@ A multithreaded program could have the format:
 	#error "Mist unsupported compiler!"
 #endif
 
-#include <stdint.h>
 #include <assert.h>
 #include <string.h>
 #include <stdbool.h>
 #include <inttypes.h>
 #include <stdio.h>
+#include <math.h>
 
 #if MIST_WIN
 #include <Windows.h>
 #endif
 
 #define MIST_UNUSED(a) (void)a
-#ifdef __cplusplus
-	#define MIST_INLINE inline
-#else
-	#define MIST_INLINE static
-#endif
 
 /* -Threads- */
+
 #if MIST_MSVC
 	#define MIST_THREAD_LOCAL __declspec( thread )
 #else
@@ -149,7 +168,7 @@ A multithreaded program could have the format:
 	#error "Mist Mutex not implemented!"
 #endif
 
-MIST_INLINE void Mist_InitLock(Mist_Lock* lock)
+void Mist_InitLock(Mist_Lock* lock)
 {
 #if MIST_WIN
 	InitializeCriticalSection(lock);
@@ -158,7 +177,7 @@ MIST_INLINE void Mist_InitLock(Mist_Lock* lock)
 #endif
 }
 
-MIST_INLINE void Mist_TerminateLock(Mist_Lock* lock)
+void Mist_TerminateLock(Mist_Lock* lock)
 {
 #if MIST_WIN
 	DeleteCriticalSection(lock);
@@ -167,7 +186,7 @@ MIST_INLINE void Mist_TerminateLock(Mist_Lock* lock)
 #endif
 }
 
-MIST_INLINE void Mist_LockSection(Mist_Lock* lock)
+void Mist_LockSection(Mist_Lock* lock)
 {
 #if MIST_WIN
 	EnterCriticalSection(lock);
@@ -176,7 +195,7 @@ MIST_INLINE void Mist_LockSection(Mist_Lock* lock)
 #endif
 }
 
-MIST_INLINE void Mist_UnlockSection(Mist_Lock* lock)
+void Mist_UnlockSection(Mist_Lock* lock)
 {
 #if MIST_WIN
 	LeaveCriticalSection(lock);
@@ -185,7 +204,7 @@ MIST_INLINE void Mist_UnlockSection(Mist_Lock* lock)
 #endif
 }
 
-MIST_INLINE uint16_t Mist_GetThreadID( void )
+uint16_t Mist_GetThreadID( void )
 {
 #if MIST_WIN
 	return (uint16_t)GetCurrentThreadId();
@@ -194,7 +213,7 @@ MIST_INLINE uint16_t Mist_GetThreadID( void )
 #endif
 }
 
-MIST_INLINE uint16_t Mist_GetProcessID( void )
+uint16_t Mist_GetProcessID( void )
 {
 #if MIST_WIN
 	return (uint16_t)GetProcessId(GetCurrentProcess());
@@ -205,7 +224,7 @@ MIST_INLINE uint16_t Mist_GetProcessID( void )
 
 /* -Timer- */
 
-MIST_INLINE int64_t Mist_TimeStamp( void )
+int64_t Mist_TimeStamp( void )
 {
 #if MIST_WIN
 	LARGE_INTEGER frequency;
@@ -228,21 +247,7 @@ MIST_INLINE int64_t Mist_TimeStamp( void )
 
 /* -Profiler- */
 
-typedef struct
-{
-	int64_t timeStamp;
-
-	const char* category;
-	const char* name;
-
-	uint16_t processorID;
-	uint16_t threadID;
-
-	char eventType;
-
-}  Mist_ProfileSample;
-
-MIST_INLINE Mist_ProfileSample Mist_CreateProfileSample(const char* category, const char* name, int64_t timeStamp, char eventType)
+Mist_ProfileSample Mist_CreateProfileSample(const char* category, const char* name, int64_t timeStamp, char eventType)
 {
 	Mist_ProfileSample sample;
 	sample.timeStamp = timeStamp;
@@ -263,8 +268,6 @@ typedef struct
 	uint16_t nextSampleWrite;
 
 } Mist_ProfileBuffer;
-extern MIST_THREAD_LOCAL Mist_ProfileBuffer mist_ProfileBuffer;
-
 
 typedef struct
 {
@@ -283,15 +286,17 @@ typedef struct
 	Mist_Lock lock;
 
 } Mist_ProfileBufferList;
-extern Mist_ProfileBufferList mist_ProfileBufferList;
 
-MIST_INLINE void Mist_ProfileInit( void )
+Mist_ProfileBufferList mist_ProfileBufferList;
+MIST_THREAD_LOCAL Mist_ProfileBuffer mist_ProfileBuffer;
+
+void Mist_ProfileInit( void )
 {
 	Mist_InitLock(&mist_ProfileBufferList.lock);
 }
 
 /* Terminate musst be the last thing called, assure that profiling events will no longer be called once this is called */
-MIST_INLINE void Mist_ProfileTerminate( void )
+void Mist_ProfileTerminate( void )
 {
 	Mist_ProfileBufferNode* iter;
 	Mist_LockSection(&mist_ProfileBufferList.lock);
@@ -313,13 +318,13 @@ MIST_INLINE void Mist_ProfileTerminate( void )
 	}
 }
 
-MIST_INLINE uint16_t Mist_ProfileListSize()
+uint16_t Mist_ProfileListSize()
 {
 	return mist_ProfileBufferList.listSize;
 }
 
 /* Not thread safe */
-MIST_INLINE void Mist_ProfileAddBufferToList(Mist_ProfileBuffer* buffer)
+static void Mist_ProfileAddBufferToList(Mist_ProfileBuffer* buffer)
 {
 	Mist_ProfileBufferNode* node = (Mist_ProfileBufferNode*)malloc(sizeof(Mist_ProfileBufferNode));
 	memcpy(&node->buffer, buffer, sizeof(Mist_ProfileBuffer));
@@ -343,11 +348,129 @@ MIST_INLINE void Mist_ProfileAddBufferToList(Mist_ProfileBuffer* buffer)
 	}
 }
 
+/* Format: process Id, thread Id,  timestamp, event, category, name */
+static const char* const mist_ProfileSample = "{\"pid\":%" PRIu16 ", \"tid\":%" PRIu16 ", \"ts\":%" PRId64 ", \"ph\":\"%c\", \"cat\": \"%s\", \"name\": \"%s\", \"args\":{\"tool\":\"Mist_Profile\"}},";
+
+static size_t Mist_SampleSize(Mist_ProfileSample* sample)
+{
+	size_t sampleSize = sizeof("{\"pid\":") - 1;
+	sampleSize += sample->processorID == 0 ? 1 : (size_t)log10f((float)sample->processorID);
+	sampleSize += sizeof(",\"tid\":") - 1;
+	sampleSize += sample->threadID == 0 ? 1 : (size_t)log10f((float)sample->threadID);
+	sampleSize += sizeof(",\"ts\":") - 1;
+	sampleSize += sample->timeStamp == 0 ? 1 : (size_t)log10((double)sample->timeStamp);
+	sampleSize += sizeof(",\"ph\":\"") - 1;
+	sampleSize += 1; /* sample char */
+	sampleSize += sizeof("\",\"cat\":\"") - 1;
+	sampleSize += strlen(sample->category);
+	sampleSize += sizeof("\", \"name\": \"") - 1;
+	sampleSize += strlen(sample->name);
+	sampleSize += sizeof("\", \"args\":{\"tool\":\"Mist_Profile\"}},") - 1;
+	return sampleSize;
+}
+
+static void Mist_Reverse(char* start, char* end)
+{
+	end -= 1;
+	for (; start < end; start++, end--)
+	{
+		char t = *start;
+		*start = *end;
+		*end = t;
+	}
+}
+
+static void Mist_WriteU16(uint16_t val, char* writeBuffer, size_t* writePos)
+{
+	size_t start = *writePos;
+	while (val > 10)
+	{
+		// Avoid modulo for debug builds
+		uint16_t t = val / 10;
+		writeBuffer[(*writePos)++] = '0' + (char)(val - t * 10);
+		val = t;
+	}
+	writeBuffer[(*writePos)++] = '0' + (char)val;
+
+	Mist_Reverse(writeBuffer + start, writeBuffer + *writePos);
+}
+
+static void Mist_WriteI64(int64_t val, char* writeBuffer, size_t* writePos)
+{
+	size_t start = *writePos;
+	while (val > 10)
+	{
+		// Avoid modulo for debug builds
+		int64_t t = val / 10;
+		writeBuffer[(*writePos)++] = '0' + (char)(val - t * 10);
+		val = t;
+	}
+	writeBuffer[(*writePos)++] = '0' + (char)val;
+
+	Mist_Reverse(writeBuffer + start, writeBuffer + *writePos);
+}
+
+#define MIST_MEMCPY_CONST_STR(str, writeBuffer, writePos) \
+	{ \
+		memcpy(writeBuffer + *writePos, str, sizeof(str) - 1); \
+		*writePos += sizeof(str) - 1; \
+	}
+
+static void Mist_WriteSample(Mist_ProfileSample* sample, char* writeBuffer, size_t* writePos)
+{
+	MIST_MEMCPY_CONST_STR("{\"pid\":", writeBuffer, writePos);
+	Mist_WriteU16(sample->processorID, writeBuffer, writePos);
+	MIST_MEMCPY_CONST_STR(",\"tid\":", writeBuffer, writePos);
+	Mist_WriteU16(sample->threadID, writeBuffer, writePos);
+	MIST_MEMCPY_CONST_STR(",\"ts\":", writeBuffer, writePos);
+	Mist_WriteI64(sample->timeStamp, writeBuffer, writePos);
+	MIST_MEMCPY_CONST_STR(",\"ph\":\"", writeBuffer, writePos);
+	writeBuffer[(*writePos)++] = sample->eventType;
+	MIST_MEMCPY_CONST_STR("\",\"cat\":\"", writeBuffer, writePos);
+	size_t strSize = strlen(sample->category);
+	memcpy(writeBuffer + (*writePos), sample->category, strSize);
+	(*writePos) += strSize;
+	MIST_MEMCPY_CONST_STR("\",\"name\":\"", writeBuffer, writePos);
+	strSize = strlen(sample->name);
+	memcpy(writeBuffer + (*writePos), sample->name, strSize);
+	(*writePos) += strSize;
+	MIST_MEMCPY_CONST_STR("\",\"args\":{\"tool\":\"Mist_Profile\"}},", writeBuffer, writePos);
+}
+
+/* Calculates the size of the samples, allowing the memory to be allocated in one chunk */
+/* Thread safe */
+size_t Mist_ProfileStringSize(void)
+{
+	Mist_ProfileBufferNode* start;
+	/* We have to keep the lock while calculating the string size. We don't want the list to be stolen or modified while we're working. */
+	Mist_LockSection(&mist_ProfileBufferList.lock);
+
+	start = mist_ProfileBufferList.first;
+
+	size_t size = 0;
+	while (start != NULL)
+	{
+		for (uint16_t i = 0; i < start->buffer.nextSampleWrite; i++)
+		{
+			Mist_ProfileSample* sample = &start->buffer.samples[i];
+			size += Mist_SampleSize(sample);
+		}
+
+		start = (Mist_ProfileBufferNode*)start->next;
+	}
+
+	Mist_UnlockSection(&mist_ProfileBufferList.lock);
+	
+	return size + 1;
+}
+
 /* Returns a string to be printed, this takes time. */
 /* Thread safe */
-/* The returned string must be freed. */
-MIST_INLINE char* Mist_Flush( void )
+/* bufferSize must be at least >= Mist_SampleStringSize(...) */
+void Mist_Flush( char* buffer, size_t* bufferSize )
 {
+	assert(bufferSize != NULL);
+
 	Mist_ProfileBufferNode* start;
 	Mist_LockSection(&mist_ProfileBufferList.lock);
 
@@ -358,66 +481,46 @@ MIST_INLINE char* Mist_Flush( void )
 
 	Mist_UnlockSection(&mist_ProfileBufferList.lock);
 
-
-	char* print = NULL;
 	if (start == NULL)
 	{
-		/* Give an empty string */
-		print = (char*)malloc(3);
-		print[0] = '{';
-		print[1] = '}';
-		print[2] = 0;
-		return print;
+		buffer[0] = '{';
+		buffer[1] = '}';
+		buffer[2] = '\0';
 	}
 
 	size_t size = 0;
 	while (start != NULL)
 	{
-		/* Format: process Id, thread Id,  timestamp, event, category, name */
-		const char* const profileSample = "{\"pid\":%" PRIu16 ", \"tid\":%" PRIu16 ", \"ts\":%" PRId64 ", \"ph\":\"%c\", \"cat\": \"%s\", \"name\": \"%s\", \"args\":{\"tool\":\"Mist_Profile\"}},";
-
 		for (uint16_t i = 0; i < start->buffer.nextSampleWrite; i++)
 		{
 			Mist_ProfileSample* sample = &start->buffer.samples[i];
-			int sampleSize = snprintf(NULL, 0, profileSample, sample->processorID, sample->threadID, sample->timeStamp, sample->eventType, sample->category, sample->name);
-			if (sampleSize <= 0)
-			{
-				assert(false);
-				continue;
-			}
-			
-			size_t previousSize = size;
-			size += sampleSize;
-			char* appended = (char*)realloc(print, size + 1 /* Add space for the null terminator*/);
-			if (appended == NULL)
-			{
-				/* Failed to allocate the buffer! Give up here and return what we have */
-				assert(false);
-				return print;
-			}
-			print = appended;
-
-			int printedSize = snprintf(print + previousSize, sampleSize + 1, profileSample, sample->processorID, sample->threadID, sample->timeStamp, sample->eventType, sample->category, sample->name);
-			if (printedSize != sampleSize)
-			{
-				assert(false);
-				continue;
-			}
+			Mist_WriteSample(sample, buffer, &size);
 		}
 
 		Mist_ProfileBufferNode* next = (Mist_ProfileBufferNode*)start->next;
 		free(start);
 		start = next;
 	}
-	print[size] = '\0';
 
-	return print;
+	if (size >= *bufferSize)
+	{
+		assert(false);
+		return;
+	}
+	buffer[size] = '\0';
+	*bufferSize = size + 1;
 }
-static const char* mist_ProfilePreface = "{\"traceEvents\":[{},";
-static const char* mist_ProfilePostface = "{}]}";
+
+void Mist_FlushAlloc(char** buffer, size_t* bufferSize)
+{
+	*bufferSize = Mist_ProfileStringSize();
+	*buffer = (char*)malloc(*bufferSize);
+
+	Mist_Flush(*buffer, bufferSize);
+}
 
 /* Thread safe */
-MIST_INLINE void Mist_WriteProfileSample(Mist_ProfileSample sample)
+void Mist_WriteProfileSample(Mist_ProfileSample sample)
 {
 	mist_ProfileBuffer.samples[mist_ProfileBuffer.nextSampleWrite] = sample;
 
@@ -434,7 +537,7 @@ MIST_INLINE void Mist_WriteProfileSample(Mist_ProfileSample sample)
 }
 
 /* Thread safe */
-MIST_INLINE void Mist_FlushThreadBuffer( void )
+void Mist_FlushThreadBuffer( void )
 {
 	Mist_LockSection(&mist_ProfileBufferList.lock);
 
@@ -444,19 +547,6 @@ MIST_INLINE void Mist_FlushThreadBuffer( void )
 	Mist_UnlockSection(&mist_ProfileBufferList.lock);
 }
 
-
-/* -API- */
-
-#define MIST_PROFILE_TYPE_BEGIN 'B'
-#define MIST_PROFILE_TYPE_END 'E'
-#define MIST_PROFILE_TYPE_INSTANT 'I'
-
-#define MIST_BEGIN_PROFILE(cat, name) Mist_WriteProfileSample(Mist_CreateProfileSample(cat, name, Mist_TimeStamp(), MIST_PROFILE_TYPE_BEGIN));
-#define MIST_END_PROFILE(cat, name) Mist_WriteProfileSample(Mist_CreateProfileSample(cat, name, Mist_TimeStamp(), MIST_PROFILE_TYPE_END));
-#define MIST_PROFILE_EVENT(cat, name) Mist_WriteProfileSample(Mist_CreateProfileSample(cat, name, Mist_TimeStamp(), MIST_PROFILE_TYPE_INSTANT));
-
-#define MIST_PROFILE_DEFINE_GLOBALS \
-	Mist_ProfileBufferList mist_ProfileBufferList; \
-	MIST_THREAD_LOCAL Mist_ProfileBuffer mist_ProfileBuffer;
+#endif /* MIST_PROFILE_IMPLEMENTATION */
 
 #endif /* __MIST_PROFILER_H */
