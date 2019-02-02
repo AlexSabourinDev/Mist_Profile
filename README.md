@@ -5,11 +5,15 @@ Mist_Profiler is completely thread safe and attempts to minimize contention betw
 
 ### Usage:
 Using `Mist_Profiler.h` is simple,
-Before any use of the profiler add `MIST_PROFILE_DEFINE_GLOBALS`
-to the top of a cpp file and call
-
+Include in one of your source files with define:
 ```C
-	Mist_ProfilerInit();
+	#define MIST_PROFILE_IMPLEMENTATION
+	#include <Mist_Profiler.h>
+```
+
+Before profiling call:
+```C
+	Mist_ProfileInit();
 ```
 
 And at the end of your program execution call
@@ -21,15 +25,14 @@ And at the end of your program execution call
 To gather samples for the profiler, simply call
 
 ```C
-	MIST_BEGIN_PROFILE("Category Of Sample", "Sample Name");
+	MIST_PROFILE_BEGIN("Category Of Sample", "Sample Name");
 
 	// ...
 
-	MIST_END_PROFILE("Category Of Sample", "Sample Name");
+	MIST_PROFILE_END("Category Of Sample", "Sample Name");
 ```
 
-[chrome://tracing](chrome://tracing) matches these calls by name and category so determining a unique name for these samples and categories is important
-to generate informative profiling data.
+[chrome://tracing](chrome://tracing) matches these calls by name and category. Determining a unique name for these is important.
 
 **Warning:** `Category` and `Name` are not stored, their lifetime must exist either until program termination or until the next call to `Mist_FlushThreadBuffer` and `Mist_Flush`.
 
@@ -45,11 +48,13 @@ A simple way to do this is shown below
 		Mist_FlushThreadBuffer();
 	}
 
-	char* print = Mist_Flush();
+	char* print;
+	size_t bufferSize;
+	Mist_FlushAlloc(&print, &bufferSize); // Edit: Changed from Mist_Flush!! Mist_Flush now requires a buffer to be passed to it.
 	fprintf(fileHandle, "%s", print);
 	free(print);
 ```
-**Warning:** Flushing many samples can be quite slow, the size of the buffer can either be minimized or
+**Warning:** Flushing many samples can be slow, the size of the buffer can either be minimized or
 flushing on a seperate thread can be used to minimize the latency.
 
 Finally, when printing out the buffer, the set of samples must include the preface and postface.
@@ -67,7 +72,9 @@ before the last flush as the remaining buffers might have some samples left in t
 
 A multithreaded program could have the format:
 ```
-	Define Globals
+	#define MIST_PROFILE_IMPLEMENTATION
+	#include <Mist_Profiler.h>
+	
 	Init Profiler
 	Add mist_ProfilePreface to the file
 
@@ -81,7 +88,7 @@ A multithreaded program could have the format:
 		At thread termination, call Mist_FlushThreadBuffer()
 
 	Kill all the threads
-	Call Mist_Flush() to flush the remaining buffers
+	Call Mist_FlushAlloc() to flush the remaining buffers
 
 	Print to a file
 	Add mist_ProfilePostface to the file
@@ -90,56 +97,58 @@ A multithreaded program could have the format:
 ```
 
 ##### Tested Compilers
-MSVC 2017
+- MSVC 2017
 
 ##### Supported Platforms
-Windows
+- Windows
 
 ##### Planned Support
-Unix,
-Mac OS,
-GCC,
-Clang
+- Unix
+- Mac OS
+- GCC
+- Clang
 
 #### Sample Program
 ```C
 #include <stdlib.h>
 #include <stdio.h>
 
-MIST_PROFILE_DEFINE_GLOBALS
+#define MIST_PROFILE_IMPLEMENTATION
+#include <Mist_Profiler.h>
+
 int main(int argc, char** argv)
 {
-	MIST_UNUSED(argc);
-	MIST_UNUSED(argv);
+	(void)argc;
+	(void)argv;
 
 	Mist_ProfileInit();
 
 	FILE* file;
 	fopen_s(&file, "Profiling.txt", "w");
 
-	MIST_BEGIN_PROFILE("Full Profile", "Profiling...");
+	MIST_PROFILE_BEGIN("Full Profile", "Profiling...");
 	for (int i = 0; i < 1024; i++)
 	{
-		MIST_BEGIN_PROFILE("Profiling!", "Profiling!");
-		MIST_END_PROFILE("Profiling!", "Profiling!");
+		MIST_PROFILE_BEGIN("Profiling!", "Profiling!");
+		MIST_PROFILE_END("Profiling!", "Profiling!");
 		MIST_PROFILE_EVENT("Profiling!", "Event!");
 	}
 
-	MIST_BEGIN_PROFILE("Profiling!", "Flushing!");
+	MIST_PROFILE_BEGIN("Profiling!", "Flushing!");
 	Mist_FlushThreadBuffer();
-	char* buffer = Mist_Flush();
-	MIST_END_PROFILE("Profiling!", "Flushing!");
+	char* buffer = Mist_FlushAlloc();
+	MIST_PROFILE_END("Profiling!", "Flushing!");
 
-	MIST_BEGIN_PROFILE("Profiling!", "Writing To File!");
+	MIST_PROFILE_BEGIN("Profiling!", "Writing To File!");
 	fprintf(file, "%s", mist_ProfilePreface);
 	fprintf(file, "%s", buffer);
 	free(buffer);
-	MIST_END_PROFILE("Profiling!", "Writing To File!");
+	MIST_PROFILE_END("Profiling!", "Writing To File!");
 
-	MIST_END_PROFILE("Full Profile", "Profiling...");
+	MIST_PROFILE_END("Full Profile", "Profiling...");
 
 	Mist_FlushThreadBuffer();
-	buffer = Mist_Flush();
+	buffer = Mist_FlushAlloc();
 
 	fprintf(file, "%s", buffer);
 	fprintf(file, "%s", mist_ProfilePostface);
@@ -161,4 +170,6 @@ https://aras-p.info/blog/2017/01/23/Chrome-Tracing-as-Profiler-Frontend/
 and the team working on chrome://tracing or providing the tools and information needed to implement this library.
 
 #### Change Log
-2018-02-14: Removed the need for a comma to append the buffers. This will break previous usage of the profiler but since it isn't a week old, I believe this is fine.
+- 2019-01-13: Changed Mist_Flush to Mist_FlushAlloc. Mist_Flush now requires an explicit buffer. This will break previous usage of the profiler.
+- 2019-01-13: Changed MIST_BEGIN/END_PROFILE to MIST_PROFILE_BEGIN/END. Will break previous calls to old macros.
+- 2018-02-14: Removed the need for a comma to append the buffers. This will break previous usage of the profiler but since it isn't a week old, I believe this is fine.

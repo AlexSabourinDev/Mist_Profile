@@ -34,7 +34,9 @@ A simple way to do this is shown below
 		Mist_FlushThreadBuffer();
 	}
 
-	char* print = Mist_FlushAlloc();
+	char* print;
+	size_t bufferSize;
+	Mist_FlushAlloc(&print, &bufferSize);
 
 	fprintf(fileHandle, "%s", mist_ProfilePreface);
 	fprintf(fileHandle, "%s", print);
@@ -394,7 +396,7 @@ static void Mist_Reverse(char* start, char* end)
 static void Mist_WriteU16(uint16_t val, char* writeBuffer, size_t* writePos)
 {
 	size_t start = *writePos;
-	while (val > 10)
+	while (val >= 10)
 	{
 		// Avoid modulo for debug builds
 		uint16_t t = val / 10;
@@ -409,7 +411,7 @@ static void Mist_WriteU16(uint16_t val, char* writeBuffer, size_t* writePos)
 static void Mist_WriteI64(int64_t val, char* writeBuffer, size_t* writePos)
 {
 	size_t start = *writePos;
-	while (val > 10)
+	while (val >= 10)
 	{
 		// Avoid modulo for debug builds
 		int64_t t = val / 10;
