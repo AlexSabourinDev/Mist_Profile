@@ -13,6 +13,7 @@ Using Mist_Profiler is simple,
 
 SETUP/TEARDOWN:
 - #define MIST_PROFILE_IMPLEMENTATION before including the header file in one of your source files.
+- #define MIST_PROFILE_ENABLE to enable profiling
 - Mist_ProfileInit(); to init
 - Mist_ProfileTerminate(); to close
 
@@ -80,9 +81,19 @@ A multithreaded program could have the format:
 #define MIST_PROFILE_TYPE_END 'E'
 #define MIST_PROFILE_TYPE_INSTANT 'I'
 
+#ifdef MIST_PROFILE_ENABLED
+
 #define MIST_PROFILE_BEGIN(cat, name) Mist_WriteProfileSample(Mist_CreateProfileSample(cat, name, Mist_TimeStamp(), MIST_PROFILE_TYPE_BEGIN));
 #define MIST_PROFILE_END(cat, name) Mist_WriteProfileSample(Mist_CreateProfileSample(cat, name, Mist_TimeStamp(), MIST_PROFILE_TYPE_END));
 #define MIST_PROFILE_EVENT(cat, name) Mist_WriteProfileSample(Mist_CreateProfileSample(cat, name, Mist_TimeStamp(), MIST_PROFILE_TYPE_INSTANT));
+
+#else
+
+#define MIST_PROFILE_BEGIN(cat, name)
+#define MIST_PROFILE_END(cat, name)
+#define MIST_PROFILE_EVENT(cat, name)
+
+#endif
 
 typedef struct
 {
