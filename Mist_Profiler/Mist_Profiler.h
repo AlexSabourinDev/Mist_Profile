@@ -125,11 +125,12 @@ uint16_t Mist_ProfileListSize();
 size_t Mist_ProfileStringSize(void);
 void Mist_Flush(char* buffer, size_t* maxBufferSize);
 void Mist_FlushAlloc(char** buffer, size_t* bufferSize);
+void Mist_Free(char* buffer);
 void Mist_FlushThreadBuffer(void);
 
 int64_t Mist_TimeStamp(void);
 
-
+void Mist_WriteToFile(const char* filePath);
 
 /* -Implementation- */
 #ifdef MIST_PROFILE_IMPLEMENTATION
@@ -484,6 +485,11 @@ void Mist_Flush( char* buffer, size_t* bufferSize )
 {
 	assert(bufferSize != NULL);
 
+	if (*bufferSize < 4)
+	{
+		return;
+	}
+
 	Mist_ProfileBufferNode* start;
 	Mist_LockSection(&mist_ProfileBufferList.lock);
 
@@ -532,6 +538,11 @@ void Mist_FlushAlloc(char** buffer, size_t* bufferSize)
 	Mist_Flush(*buffer, bufferSize);
 }
 
+void Mist_Free(char* buffer)
+{
+	free(buffer);
+}
+
 /* Thread safe */
 void Mist_WriteProfileSample(Mist_ProfileSample sample)
 {
@@ -558,6 +569,38 @@ void Mist_FlushThreadBuffer( void )
 	mist_ProfileBuffer.nextSampleWrite = 0;
 
 	Mist_UnlockSection(&mist_ProfileBufferList.lock);
+}
+
+void Mist_WriteToFile(const char* filePath)
+{
+#ifdef WIN32
+	FILE* fileHandle;
+	errno_t error = fopen_s(&fileHandle, filePath, "w");
+	if (error != 0)
+	{
+		return;
+	}
+#else
+	FILE* fileHandle = fopen(filePath, "w");
+	if (fileHandle == NULL)
+	{
+		return;
+	}
+#endif // WIN32
+
+	char* print = 0;
+	size_t bufferSize = 0;
+	Mist_FlushAlloc(&print, &bufferSize);
+
+	if (strlen(print) > 0)
+	{
+		fprintf(fileHandle, "%s", mist_ProfilePreface);
+		fprintf(fileHandle, "%s", print);
+		fprintf(fileHandle, "%s", mist_ProfilePostface);
+	}
+
+	Mist_Free(print);
+	fclose(fileHandle);
 }
 
 #endif /* MIST_PROFILE_IMPLEMENTATION */
