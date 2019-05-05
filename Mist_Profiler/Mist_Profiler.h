@@ -99,7 +99,7 @@ A multithreaded program could have the format:
 
 typedef struct
 {
-	uint64_t timeStamp;
+	int64_t timeStamp;
 
 	const char* category;
 	const char* name;
@@ -117,7 +117,7 @@ static const char* mist_ProfilePostface = "{}]}";
 void Mist_ProfileInit(void);
 void Mist_ProfileTerminate(void);
 
-Mist_ProfileSample Mist_CreateProfileSample(const char* category, const char* name, uint64_t timeStamp, char eventType);
+Mist_ProfileSample Mist_CreateProfileSample(const char* category, const char* name, int64_t timeStamp, char eventType);
 void Mist_WriteProfileSample(Mist_ProfileSample sample);
 
 uint16_t Mist_ProfileListSize();
@@ -128,9 +128,11 @@ void Mist_FlushAlloc(char** buffer, size_t* bufferSize);
 void Mist_Free(char* buffer);
 void Mist_FlushThreadBuffer(void);
 
-uint64_t Mist_TimeStamp(void);
+int64_t Mist_TimeStamp(void);
 
 void Mist_WriteToFile(const char* filePath);
+
+#endif /* __MIST_PROFILER_H */
 
 /* -Implementation- */
 #ifdef MIST_PROFILE_IMPLEMENTATION
@@ -238,7 +240,7 @@ uint16_t Mist_GetProcessID( void )
 
 /* -Timer- */
 
-uint64_t Mist_TimeStamp( void )
+int64_t Mist_TimeStamp( void )
 {
 #if MIST_WIN
 	LARGE_INTEGER frequency;
@@ -252,8 +254,8 @@ uint64_t Mist_TimeStamp( void )
 	queryResult = QueryPerformanceCounter(&time);
 	assert(queryResult == TRUE);
 
-	uint64_t microSeconds = (uint64_t)time.QuadPart * 1000000;
-	return microSeconds / (uint64_t)frequency.QuadPart;
+	int64_t microSeconds = (int64_t)time.QuadPart * 1000000;
+	return microSeconds / (int64_t)frequency.QuadPart;
 #else
 	#error "Mist_TimeStamp not implemented!"
 #endif
@@ -261,7 +263,7 @@ uint64_t Mist_TimeStamp( void )
 
 /* -Profiler- */
 
-Mist_ProfileSample Mist_CreateProfileSample(const char* category, const char* name, uint64_t timeStamp, char eventType)
+Mist_ProfileSample Mist_CreateProfileSample(const char* category, const char* name, int64_t timeStamp, char eventType)
 {
 	Mist_ProfileSample sample;
 	sample.timeStamp = timeStamp;
@@ -409,13 +411,13 @@ static void Mist_WriteU16(uint16_t val, char* writeBuffer, size_t* writePos)
 	Mist_Reverse(writeBuffer + start, writeBuffer + *writePos);
 }
 
-static void Mist_WriteU64(uint64_t val, char* writeBuffer, size_t* writePos)
+static void Mist_WriteI64(int64_t val, char* writeBuffer, size_t* writePos)
 {
 	size_t start = *writePos;
 	while (val >= 10)
 	{
 		// Avoid modulo for debug builds
-		uint64_t t = val / 10;
+		int64_t t = val / 10;
 		writeBuffer[(*writePos)++] = '0' + (char)(val - t * 10);
 		val = t;
 	}
@@ -437,7 +439,7 @@ static void Mist_WriteSample(Mist_ProfileSample* sample, char* writeBuffer, size
 	MIST_MEMCPY_CONST_STR(",\"tid\":", writeBuffer, writePos);
 	Mist_WriteU16(sample->threadID, writeBuffer, writePos);
 	MIST_MEMCPY_CONST_STR(",\"ts\":", writeBuffer, writePos);
-	Mist_WriteU64(sample->timeStamp, writeBuffer, writePos);
+	Mist_WriteI64(sample->timeStamp, writeBuffer, writePos);
 	MIST_MEMCPY_CONST_STR(",\"ph\":\"", writeBuffer, writePos);
 	writeBuffer[(*writePos)++] = sample->eventType;
 	MIST_MEMCPY_CONST_STR("\",\"cat\":\"", writeBuffer, writePos);
@@ -604,5 +606,3 @@ void Mist_WriteToFile(const char* filePath)
 }
 
 #endif /* MIST_PROFILE_IMPLEMENTATION */
-
-#endif /* __MIST_PROFILER_H */
