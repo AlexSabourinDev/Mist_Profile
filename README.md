@@ -171,7 +171,7 @@ https://aras-p.info/blog/2017/01/23/Chrome-Tracing-as-Profiler-Frontend/
 and the team working on chrome://tracing or providing the tools and information needed to implement this library.
 
 #### Change Log
-- 2019-02-02: Added MIST_PROFILE_ENABLED to allow the profiler to be enabled and disabled. This makes usage a bit more cumbersome, but simplifies turning off the compiler. This will break previous usage of the compiler.
+- 2019-02-02: Added MIST_PROFILE_ENABLED to allow the profiler to be enabled and disabled. This makes usage a bit more cumbersome, but simplifies turning off the profiler. This will break previous usage of the profiler.
 - 2019-01-13: Changed Mist_Flush to Mist_FlushAlloc. Mist_Flush now requires an explicit buffer. This will break previous usage of the profiler.
 - 2019-01-13: Changed MIST_BEGIN/END_PROFILE to MIST_PROFILE_BEGIN/END. Will break previous calls to old macros.
 - 2018-02-14: Removed the need for a comma to append the buffers. This will break previous usage of the profiler but since it isn't a week old, I believe this is fine.
