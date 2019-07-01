@@ -120,7 +120,7 @@ void Mist_ProfileTerminate(void);
 Mist_ProfileSample Mist_CreateProfileSample(const char* category, const char* name, int64_t timeStamp, char eventType);
 void Mist_WriteProfileSample(Mist_ProfileSample sample);
 
-uint16_t Mist_ProfileListSize();
+uint16_t Mist_ProfileListSize(void);
 
 size_t Mist_ProfileStringSize(void);
 void Mist_Flush(char* buffer, size_t* maxBufferSize);
@@ -334,7 +334,7 @@ void Mist_ProfileTerminate( void )
 	}
 }
 
-uint16_t Mist_ProfileListSize()
+uint16_t Mist_ProfileListSize( void )
 {
 	return mist_ProfileBufferList.listSize;
 }
