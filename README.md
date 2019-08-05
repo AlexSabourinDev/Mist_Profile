@@ -1,4 +1,7 @@
 # Mist_Profiler
+## ARCHIVED
+Mist_Profiler has moved from this repo to cranberries. Find the renamed cranberry_profiler here https://github.com/AlexSabourinDev/cranberries/blob/master/cranberry_profiler.h!
+
 ### About:
 The Mist_Profiler is a single header utility that generates [chrome://tracing](chrome://tracing) json that can be then imported and viewed using chrome's tracing utility. 
 Mist_Profiler is completely thread safe and attempts to minimize contention between thread.
